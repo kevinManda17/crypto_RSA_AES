@@ -1,0 +1,40 @@
+version: "3.9"
+
+# Compose file defining the RSA handshake demonstration environment.  Two
+# containers are created: a server exposing a Flask application that
+# implements the RSA/AES handshake, and a client that provides an
+# interactive demo for testing the protocol.  A private network is used
+# internally so that containers can resolve each other by name.  A
+# persistent volume stores the RSA key pair between runs.
+
+services:
+  rsa-server:
+    build: ./server
+    container_name: rsa-server
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist generated RSA keys so they survive container restarts
+      - rsa-keys:/app/keys
+    networks:
+      - secure-net
+
+  rsa-client-demo:
+    build: ./client
+    container_name: rsa-client
+    depends_on:
+      - rsa-server
+    # SERVER_URL tells the client where to reach the server.  Inside
+    # Docker we use the service name.  When running outside of Docker
+    # you can override this variable to point at your host.
+    environment:
+      - SERVER_URL=http://rsa-server:5000
+    networks:
+      - secure-net
+
+networks:
+  secure-net:
+    driver: bridge
+
+volumes:
+  rsa-keys:

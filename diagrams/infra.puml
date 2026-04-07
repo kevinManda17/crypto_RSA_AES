@@ -1,0 +1,32 @@
+@startuml
+title Deployment Diagram
+
+skinparam linetype ortho
+skinparam shadowing false
+
+actor "User" as User
+actor "Mobile Device" as Mobile
+
+frame "Host Machine" {
+  database "rsa-keys volume" as Keys
+  node "rsa-server container" as ServerContainer {
+    component "Flask RSA Server\nport 5000" as Server
+  }
+  node "rsa-client container" as ClientContainer {
+    component "Client Demo" as Client
+  }
+}
+
+User --> Server : HTTP (localhost:5000)
+Mobile --> Server : HTTP (host_ip:5000)
+ClientContainer --> ServerContainer : Docker bridge network
+ServerContainer .. Keys : mounts
+
+note bottom of Server
+The server exposes the API on port 5000 and
+reads/writes its RSA keypair into the mounted
+volume.  The client connects to the server via
+the Docker network when running in Compose.
+end note
+
+@enduml

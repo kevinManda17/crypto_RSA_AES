@@ -1,0 +1,5 @@
+This file ensures that the `keys` directory exists in version control.
+It is empty at runtime; the server will generate RSA keys into this
+directory when started.  In a Docker deployment the directory is
+mounted from a named volume so that keys persist across container
+restarts.

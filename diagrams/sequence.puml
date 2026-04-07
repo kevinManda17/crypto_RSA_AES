@@ -1,0 +1,30 @@
+@startuml
+title RSA Handshake Sequence
+
+actor Client
+participant "RSA Server" as Server
+
+== Fetch public key ==
+Client -> Server: GET /public-key
+Server --> Client: { algorithm: RSA, size: 2048, key: PEM }
+
+== Generate and encrypt AES key ==
+Client -> Client: Generate random AES-256 key
+Client -> Client: Encrypt AES key with RSA-OAEP (server public key)
+
+== Handshake ==
+Client -> Server: POST /handshake { key: base64(RSA_encrypted_AES) }
+Server -> Server: Decrypt AES key with private RSA
+Server -> Server: Create session ID and store key (TTL=1h)
+Server --> Client: { session_id, expires_at }
+
+== Exchange messages ==
+Client -> Client: Encrypt plaintext with AES-GCM → (ciphertext, nonce, tag)
+Client -> Server: POST /message with X-Session-ID header\n{ ciphertext, nonce, tag }
+Server -> Server: Verify session and decrypt AES-GCM
+Server -> Server: Process plaintext (e.g. to uppercase)
+Server -> Server: Encrypt response with AES-GCM → (ciphertext, nonce, tag)
+Server --> Client: { ciphertext, nonce, tag }
+Client -> Client: Decrypt AES-GCM and display response
+
+@enduml

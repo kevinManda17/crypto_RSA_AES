@@ -1,0 +1,41 @@
+@startuml
+title Server Components Class Diagram
+
+class RSAKeyManager {
+    +generate_keys(): void
+    +load_keys(): void
+    +get_public_key(): bytes
+    +decrypt(data: bytes): bytes
+}
+
+class SessionStore {
+    -sessions: dict
+    +create_session(key: bytes, ttl: timedelta): str
+    +get_session(id: str): bytes
+    +cleanup(): void
+}
+
+class CryptoService {
+    +encrypt_aes(key: bytes, plaintext: bytes): (bytes, bytes, bytes)
+    +decrypt_aes(key: bytes, ciphertext: bytes, nonce: bytes, tag: bytes): bytes
+    +encrypt_rsa(public_key, data: bytes): bytes
+    +decrypt_rsa(private_key, data: bytes): bytes
+}
+
+class AuthMiddleware {
+    +verify_session(request): bytes
+}
+
+class FlaskApp {
+    +/public-key(): Response
+    +/handshake(): Response
+    +/message(): Response
+    +/sessions(): Response
+}
+
+RSAKeyManager ..> SessionStore : generates and persists RSA keys
+CryptoService ..> RSAKeyManager : uses for RSA operations
+FlaskApp ..> AuthMiddleware : uses for session verification
+FlaskApp ..> CryptoService : uses for encryption/decryption
+
+@enduml
