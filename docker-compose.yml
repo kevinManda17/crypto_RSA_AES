@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Compose file defining the RSA handshake demonstration environment.  Two
 # containers are created: a server exposing a Flask application that
 # implements the RSA/AES handshake, and a client that provides an

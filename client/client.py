@@ -8,8 +8,8 @@ by the accompanying server.  The client can:
   into a cryptography object.
 * Generate a fresh AES‑256 key and store it locally.
 * Encrypt the AES key with the server’s public RSA key and POST
-  it to `/handshake` to establish a session.  The returned
-  session identifier is stored for subsequent requests.
+  it to `/handshake` with a unique client ID to establish a session.
+  The returned session identifier is stored for subsequent requests.
 * Encrypt arbitrary plaintext using AES‑GCM, send it to
   `/message` and decrypt the response.  A simple
   transformation (upper‑casing the message) is applied by the
@@ -26,7 +26,7 @@ address.
 
 import base64
 import os
-import sys
+import uuid
 from typing import Optional
 
 import requests
@@ -40,6 +40,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # `http://rsa-server:5000`.  When running locally set SERVER_URL
 # accordingly (e.g. `export SERVER_URL=http://localhost:5000`).
 SERVER_URL = os.environ.get('SERVER_URL', 'http://rsa-server:5000')
+CLIENT_ID = os.environ.get('CLIENT_ID', f"client-{uuid.uuid4()}")
 
 public_key = None  # type: Optional[object]
 aes_key: Optional[bytes] = None
@@ -92,7 +93,10 @@ def perform_handshake() -> None:
                 label=None,
             ),
         )
-        payload = {"key": base64.b64encode(encrypted_key).decode('utf-8')}
+        payload = {
+            "client_id": CLIENT_ID,
+            "encrypted_session_key": base64.b64encode(encrypted_key).decode('utf-8'),
+        }
         resp = requests.post(f"{SERVER_URL}/handshake", json=payload, timeout=10)
         resp.raise_for_status()
         data = resp.json()
@@ -100,6 +104,7 @@ def perform_handshake() -> None:
         expires_at = data.get('expires_at')
         if session_id:
             print(f"Handshake successful. Session ID: {session_id}")
+            print(f"Client ID: {data.get('client_id', CLIENT_ID)}")
             print(f"Session expires at: {expires_at}")
         else:
             print(f"Unexpected response: {data}")
@@ -202,6 +207,7 @@ def print_menu() -> None:
     """Display the available options to the user."""
     print("\n=== RSA/AES Handshake Demo ===")
     print("Server URL:", SERVER_URL)
+    print("Client ID:", CLIENT_ID)
     print("1) Fetch server public key")
     print("2) Generate AES key")
     print("3) Perform handshake")

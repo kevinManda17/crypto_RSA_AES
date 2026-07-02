@@ -1,93 +1,144 @@
-# RSA Handshake Demonstration
+# Demonstration de handshake RSA/AES
 
-This project implements a simple cryptographic handshake using an
-asymmetric algorithm (RSA‑2048) to exchange a symmetric key
-for authenticated communication with AES‑256‑GCM.  It is composed of
-two Python components, a server and a client, packaged as
-Docker containers to simplify deployment.
+Ce projet implemente un handshake cryptographique simple utilisant RSA-2048
+pour echanger une cle symetrique AES-256. Apres le handshake, les messages
+sont chiffres avec AES-256-GCM afin d'assurer la confidentialite et
+l'authenticite des echanges entre le client et le serveur.
 
-## Overview
+Le projet est compose de deux applications Python, un serveur et un client,
+empaquetees dans des conteneurs Docker pour simplifier le lancement.
 
-* **Server (`./server`)** – A Flask application that
-  generates or loads an RSA key pair on startup, exposes the
-  public key via `/public-key`, accepts an encrypted AES key via
-  `/handshake`, stores session information with a one hour TTL, and
-  exposes a `/message` endpoint that expects an AES‑GCM encrypted
-  payload.  Messages are decrypted, processed and re‑encrypted before
-  being returned.
-* **Client (`./client`)** – A terminal‑based demo written in
-  Python.  It guides the user through retrieving the server’s
-  public key, generating a random AES key, performing the
-  handshake and exchanging encrypted messages.  A small menu
-  orchestrates each step and demonstrates failure cases (e.g.
-  invalid sessions).
-* **Docker Compose** – The `docker-compose.yml` file creates
-  two containers on an isolated network.  The server exposes port
-  5000 on the host, and a volume is used to persist RSA keys across
-  restarts.  The client container depends on the server and uses the
-  service name to reach it internally.
-* **Diagrams** – Under `./diagrams` you will find PlantUML files
-  describing the sequence of the handshake, a class diagram of
-  the server internals and a simple deployment diagram.  If you
-  have PlantUML installed you can generate images by running
-  `plantuml *.puml` in that directory.
+## Vue d'ensemble
 
-## Running the demo
+* **Serveur (`./server`)** - Une application Flask qui genere ou charge une
+  paire de cles RSA au demarrage, expose la cle publique via `/public-key`,
+  recoit un `client_id` et une cle de session AES chiffree via `/handshake`,
+  puis stocke les informations de session pendant une heure. Le serveur expose
+  aussi `/message`, un endpoint qui attend un message chiffre avec AES-GCM.
+  Un middleware Flask verifie `X-Session-ID`, journalise les tentatives non
+  authentifiees, dechiffre le corps de la requete et rejette les sessions
+  invalides avant le traitement du message.
+* **Client (`./client`)** - Un client de demonstration en terminal. Il permet
+  de recuperer la cle publique du serveur, generer une cle AES aleatoire,
+  effectuer le handshake avec un identifiant client unique, envoyer des
+  messages chiffres et afficher les reponses dechiffrees.
+* **Docker Compose** - Le fichier `docker-compose.yml` cree deux conteneurs
+  sur un reseau isole. Le serveur expose le port `5000` sur la machine hote,
+  et un volume Docker conserve les cles RSA entre les redemarrages.
+* **Diagrammes** - Le dossier `./diagrams` contient les fichiers PlantUML qui
+  decrivent la sequence du handshake, les composants du serveur et
+  l'infrastructure Docker.
 
-1. **Build and start the containers**
+## Lancer le projet sur Linux Mint
 
-   ```bash
-   docker-compose up --build
-   ```
+Depuis la racine du projet :
 
-   The server will listen on port 5000.  The first run will
-   generate an RSA key pair and store it in the `rsa-keys` volume.
+```bash
+cd /home/kevin/Documents/KEVIN/programming/l4_cyber/crypto_RSA_AES
+```
 
-2. **Interact with the client**
+Construire l'image et lancer le serveur :
 
-   In a separate terminal you can run the demo client within the
-   Docker network:
+```bash
+docker compose up --build -d rsa-server
+```
 
-   ```bash
-   docker-compose run --rm rsa-client-demo
-   ```
+Lancer le client interactif :
 
-   A menu will appear allowing you to fetch the public key,
-   generate an AES key, perform the handshake and send encrypted
-   messages.  You can also run an automated demo that performs all
-   steps sequentially.
+```bash
+docker compose run --rm rsa-client-demo
+```
 
-3. **Access the API directly**
+Dans le menu du client, executer les etapes suivantes :
 
-   You may also interact with the server using curl or Postman on
-   `http://localhost:5000` when running on the same machine, or
-   replace `localhost` with your host’s IP address (e.g.
-   `172.20.10.5`) when accessing it from another device on your
-   network.
+```text
+1) Fetch server public key
+2) Generate AES key
+3) Perform handshake
+4) Send message
+```
 
-## PlantUML diagrams
+Afficher les logs du serveur :
 
-Three UML diagrams are included as text files in the `diagrams`
-directory:
+```bash
+docker compose logs -f rsa-server
+```
 
-| file                | description |
-|---------------------|-------------|
-| `sequence.puml`     | Sequence diagram of the handshake, message exchange and decryption/response cycle. |
-| `class.puml`        | Class diagram summarising the major components in the server implementation (key manager, session store, crypto service, middleware and Flask routes). |
-| `infra.puml`        | Deployment diagram illustrating the two containers, the Docker bridge network, the persisted volume and the interaction from host and mobile devices. |
+Arreter le projet :
 
-To generate PNG files from these definitions you can install
-PlantUML locally and run:
+```bash
+docker compose down
+```
+
+Arreter le projet et supprimer les cles RSA persistees :
+
+```bash
+docker compose down -v
+```
+
+## Endpoints de l'API
+
+`GET /public-key` retourne la cle publique RSA du serveur :
+
+```json
+{
+  "algorithm": "RSA",
+  "size": 2048,
+  "key": "-----BEGIN PUBLIC KEY-----..."
+}
+```
+
+`POST /handshake` recoit l'identifiant du client et la cle AES-256 chiffree
+avec la cle publique RSA du serveur :
+
+```json
+{
+  "client_id": "client-uuid",
+  "encrypted_session_key": "base64-rsa-oaep-ciphertext"
+}
+```
+
+La reponse contient la session a utiliser pour les requetes suivantes :
+
+```json
+{
+  "status": "ok",
+  "client_id": "client-uuid",
+  "session_id": "session-uuid",
+  "expires_at": "2026-04-03T12:00:00Z"
+}
+```
+
+`POST /message` doit contenir l'en-tete `X-Session-ID` et un corps chiffre
+avec AES-GCM :
+
+```json
+{
+  "ciphertext": "base64-ciphertext",
+  "nonce": "base64-96-bit-nonce",
+  "tag": "base64-authentication-tag"
+}
+```
+
+## Diagrammes PlantUML
+
+Trois diagrammes UML sont fournis dans le dossier `diagrams` :
+
+| Fichier | Description |
+| --- | --- |
+| `sequence.puml` | Diagramme de sequence du handshake, de l'echange de messages et du cycle chiffrement/dechiffrement. |
+| `class.puml` | Diagramme de classes resumant les composants principaux du serveur. |
+| `infra.puml` | Diagramme d'infrastructure montrant les conteneurs Docker, le reseau et le volume persistant. |
+
+Pour generer les images PNG avec PlantUML :
 
 ```bash
 cd diagrams
 plantuml *.puml
 ```
 
-## License
+## Licence
 
-This project is provided for educational purposes and does not
-constitute production‑ready cryptographic infrastructure.  Use it to
-learn about RSA handshakes, AES‑GCM and Docker networking but
-apply appropriate security audits before deploying similar
-mechanisms in real applications.
+Ce projet est fourni a des fins pedagogiques. Il sert a comprendre un
+handshake hybride RSA/AES, l'utilisation d'AES-GCM et l'organisation d'une
+demonstration client-serveur avec Docker.

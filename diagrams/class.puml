@@ -10,8 +10,8 @@ class RSAKeyManager {
 
 class SessionStore {
     -sessions: dict
-    +create_session(key: bytes, ttl: timedelta): str
-    +get_session(id: str): bytes
+    +create_session(client_id: str, key: bytes, ttl: timedelta): str
+    +get_session(id: str): dict
     +cleanup(): void
 }
 
@@ -23,7 +23,9 @@ class CryptoService {
 }
 
 class AuthMiddleware {
-    +verify_session(request): bytes
+    +verify_session(request): dict
+    +decrypt_request_body(request): bytes
+    +log_unauthenticated_attempt(reason: str): void
 }
 
 class FlaskApp {
