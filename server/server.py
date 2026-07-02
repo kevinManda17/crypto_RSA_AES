@@ -140,6 +140,18 @@ def log_unauthenticated_attempt(reason: str, session_id: Optional[str] = None) -
     )
 
 
+def log_success(action: str, **fields: Any) -> None:
+    """Log a successful operation for demo/audit visibility."""
+    details = " ".join(f"{key}={value}" for key, value in fields.items())
+    app.logger.info(
+        "%s: path=%s %s remote_addr=%s",
+        action,
+        request.path,
+        details,
+        request.remote_addr or "-",
+    )
+
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(exc: HTTPException):
     """Return API errors as JSON instead of Flask's default HTML pages."""
@@ -185,6 +197,12 @@ def decrypt_protected_request():
         )
         abort(400, description="Decryption failed")
 
+    log_success(
+        "Session validated",
+        session_id=session_id,
+        client_id=session.get("client_id", "-"),
+    )
+
     g.session_id = session_id
     g.session = session
     g.aes_key = session['key']
@@ -199,6 +217,7 @@ def get_public_key():
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
+    log_success("Public key served")
     return jsonify({
         "algorithm": "RSA",
         "size": 2048,
@@ -247,6 +266,12 @@ def handshake():
         "key": aes_key,
         "expires_at": expires_at,
     }
+    log_success(
+        "Handshake established",
+        client_id=client_id,
+        session_id=session_id,
+        expires_at=expires_at.isoformat() + 'Z',
+    )
     return jsonify({
         "status": "ok",
         "client_id": client_id,
@@ -272,6 +297,11 @@ def message():
     new_nonce = os.urandom(12)  # 96‑bit nonce for GCM
     ct_and_tag = AESGCM(g.aes_key).encrypt(new_nonce, response_bytes, None)
     ct, tag = ct_and_tag[:-16], ct_and_tag[-16:]
+    log_success(
+        "Message processed",
+        session_id=g.session_id,
+        client_id=g.session.get("client_id", "-"),
+    )
     return jsonify({
         "ciphertext": base64.b64encode(ct).decode('utf-8'),
         "nonce": base64.b64encode(new_nonce).decode('utf-8'),
